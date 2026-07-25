@@ -160,12 +160,23 @@ if command -v ollama >/dev/null 2>&1; then
     if grep -q "qwen2.5:7b" <<< "$ollama_models"; then
         echo "ollama + qwen2.5:7b уже есть — LLM-варианты в попапе доступны"
     else
-        echo "Ollama есть, модели qwen2.5:7b нет. Поставить сейчас (~4.7 ГБ)?"
-        read -r -p "  [Y/n] " reply
-        if [[ ! "$reply" =~ ^[Nn] ]]; then
-            ollama pull qwen2.5:7b
+        echo "Ollama есть, модели qwen2.5:7b нет (~4.7 ГБ)."
+        if [ -t 0 ]; then
+            read -r -p "Поставить сейчас? [Y/n] " reply
+            if [[ ! "$reply" =~ ^[Nn] ]]; then
+                ollama pull qwen2.5:7b
+            else
+                echo "пропущено — можно позже: ollama pull qwen2.5:7b"
+            fi
         else
-            echo "пропущено — можно позже: ollama pull qwen2.5:7b"
+            # Нет интерактивного stdin — типичная ситуация, когда install.sh
+            # запускает ИИ-агент через инструмент выполнения команд без tty.
+            # Два риска сразу: (1) `read` на EOF возвращает ошибку, и под
+            # `set -e` это тихо убило бы весь скрипт ДО финального сообщения
+            # про Accessibility — самый важный ручной шаг; (2) без человека
+            # рядом нельзя молча тянуть 4.7 ГБ без явного согласия. Поэтому
+            # без tty просто пропускаем — безопасный дефолт в обе стороны.
+            echo "нет интерактивного терминала — пропускаю (спроси человека, затем: ollama pull qwen2.5:7b)"
         fi
     fi
 else

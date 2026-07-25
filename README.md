@@ -40,6 +40,13 @@ app, from any source (typed, pasted, dictated).
 
 - macOS (uses AppKit/PyObjC + the Accessibility API — no other platform).
 - Python 3.12 (installed automatically via Homebrew if missing).
+- [Homebrew](https://brew.sh) — only if Python 3.12 isn't already present.
+  `install.sh` does **not** install Homebrew itself (its official installer
+  needs `sudo` and an interactive password prompt, which is exactly the kind
+  of system-level, credential-requiring step this script deliberately
+  doesn't automate) — if neither is present, it stops and prints the two
+  one-line options (install Homebrew, or install Python 3.12 directly from
+  python.org) instead of guessing.
 - [Ollama](https://ollama.com) — **optional**. Without it, LexFix still
   does exact/fuzzy/transliteration dictionary correction; it just skips the
   LLM reranking and free-guess layers, and homonym resolution (see below).
@@ -54,7 +61,21 @@ cd lexfix
 bash install.sh
 ```
 
-`install.sh` is idempotent — safe to re-run after a `git pull` or if a
+`git clone` itself has one first-run wrinkle worth knowing about: on a
+genuinely brand-new Mac that has never run any developer tool, the very
+first invocation of `git` pops up a **macOS system dialog** offering to
+install Command Line Tools — a GUI prompt, not something a script can click
+through. If that appears, install the tools it offers (or run
+`xcode-select --install` yourself) and re-run the clone once that finishes.
+
+`install.sh` is safe to run **non-interactively** (no terminal attached,
+e.g. invoked by an agent's command-execution tool rather than a real shell)
+— every step that would otherwise ask a yes/no question detects the missing
+terminal and picks the conservative default (skip, don't guess) instead of
+hanging or silently downloading something large without anyone agreeing to
+it.
+
+It's also idempotent — safe to re-run after a `git pull` or if a
 previous run stopped partway through. It does, in order:
 
 1. **Finds or installs Python 3.12** (via Homebrew if not already present).
