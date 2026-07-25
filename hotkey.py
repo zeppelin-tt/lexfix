@@ -42,6 +42,14 @@ VK_S = 1  # kVK_ANSI_S — физическая клавиша S, она же Ы
 SETTINGS_PATH = Path(__file__).resolve().parent / "settings.json"
 DEFAULT_KEYCODE = VK_S
 DEFAULT_MODIFIERS = cmdKey | shiftKey
+# 0 — большинству пользователей задержка не нужна: настоящая физическая
+# клавиатура и так доставляет Cmd+Shift+S раньше нашего Cmd+C без всякой
+# гонки. Поднимать стоит только тем, у кого хоткей назначен через стороннее
+# ПО с программируемыми кнопками (Logitech Options+ и подобные) — там
+# эмуляция комбинации иногда ещё не успевает домаршрутизироваться, когда мы
+# уже шлём свой Cmd+C, и выделение не копируется. Подобрано эмпирически:
+# 0 иногда не срабатывал именно в этом сценарии, 50 срабатывал стабильно.
+DEFAULT_COPY_DELAY_MS = 0
 
 # Только те клавиши, у которых есть разумное отображаемое имя — recorder
 # принимает и остальные (хранит код), но подписывает как «код N».
@@ -83,18 +91,47 @@ def describe(keycode: int, modifiers: int) -> str:
     return "".join(parts)
 
 
+def _load_settings() -> dict:
+    try:
+        return json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_settings(data: dict) -> None:
+    SETTINGS_PATH.write_text(json.dumps(data), encoding="utf-8")
+
+
 def load() -> tuple:
     """Сохранённая комбинация или дефолт (Cmd+Shift+S), если файла ещё нет."""
+    data = _load_settings()
     try:
-        data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
         return int(data["keycode"]), int(data["modifiers"])
-    except (OSError, json.JSONDecodeError, KeyError, ValueError):
+    except (KeyError, TypeError, ValueError):
         return DEFAULT_KEYCODE, DEFAULT_MODIFIERS
 
 
 def save(keycode: int, modifiers: int) -> None:
-    SETTINGS_PATH.write_text(json.dumps({"keycode": keycode, "modifiers": modifiers}),
-                              encoding="utf-8")
+    # Читаем-обновляем-пишем, а не перезаписываем файл целиком: иначе эта
+    # функция затирала бы copy_delay_ms, сохранённый отдельным полем формы.
+    data = _load_settings()
+    data["keycode"] = keycode
+    data["modifiers"] = modifiers
+    _save_settings(data)
+
+
+def load_copy_delay_ms() -> int:
+    data = _load_settings()
+    try:
+        return max(0, int(data.get("copy_delay_ms", DEFAULT_COPY_DELAY_MS)))
+    except (TypeError, ValueError):
+        return DEFAULT_COPY_DELAY_MS
+
+
+def save_copy_delay_ms(ms: int) -> None:
+    data = _load_settings()
+    data["copy_delay_ms"] = max(0, int(ms))
+    _save_settings(data)
 
 
 class _EventTypeSpec(ctypes.Structure):

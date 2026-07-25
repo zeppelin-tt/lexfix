@@ -21,6 +21,8 @@ app, from any source (typed, pasted, dictated).
 
 - **⌘⇧S** opens a popup pre-filled with whatever's selected in the
   frontmost app (via a simulated ⌘C, not the system clipboard history).
+  Both the hotkey and a copy delay are configurable — see
+  [Settings](#settings) below.
 - Looks up the word against a local dictionary (exact match, fuzzy match,
   transliteration-skeleton match for Cyrillic-typed English words).
 - If enabled, asks a local LLM (via [Ollama](https://ollama.com), fully
@@ -181,7 +183,7 @@ remove-and-re-add first.
 | Fix a word | Select it anywhere → **⌘⇧S** → pick a variant (↑↓ or click) → **Enter** |
 | Type your own | Just type over either field — no variant fits, no problem |
 | Teach a new proper noun | Bottom field, type the correct spelling → **Enter** (this doesn't force a rule, it teaches the fuzzy matcher the name exists) |
-| Right-click the ✎ icon | Open `learned.json`, force a dictionary rebuild, quit |
+| Right-click the ✎ icon | Open `learned.json`, force a dictionary rebuild, open **Settings…**, quit |
 
 ### Command-line (no popup)
 
@@ -197,6 +199,29 @@ venv/bin/python3 lex.py list                          # your rules
 `fix` vs `add`: `fix` is one hard mapping for a recurring, specific typo.
 `add` teaches the *name itself*, after which the fuzzy layer catches *any*
 typo in it on its own. Details and a non-obvious side effect below.
+
+## Settings
+
+Right-click the ✎ icon → **Настройки…** opens a small window with two
+fields, both saved to a local, gitignored `settings.json` (per-machine,
+never synced):
+
+- **Hotkey** — click the field, then press the combo you want. Takes
+  effect immediately on Save; if the combo is already claimed by another
+  app, the field reports that instead of silently failing. Default:
+  **⌘⇧S**.
+- **Copy delay (ms)** — how long LexFix waits after the hotkey fires
+  before it simulates ⌘C to grab your selection. **Default 0** — a real
+  keyboard delivers the combo fast enough that this isn't needed. Raise it
+  (empirically, **~50ms** is enough) only if your hotkey is remapped
+  through third-party software with programmable buttons (Logitech
+  Options+ and similar) — those can deliver the keystroke a beat later
+  than a physical key, and if our ⌘C fires first, the selection you meant
+  to copy is missed: the popup opens, but the previous selection (or
+  nothing) shows up instead. Symptom to watch for: the popup consistently
+  shows the *previous* word you selected rather than the current one,
+  every time, only when using the remapped button — that's this race, not
+  a bug in the correction logic itself.
 
 ## Fix vs. teach: two different actions
 

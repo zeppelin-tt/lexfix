@@ -257,6 +257,29 @@ def _variant_title(text: str, source: str, selected: bool):
     return title
 
 
+# Задержка перед симуляцией Cmd+C, в миллисекундах. Живёт как модульная
+# переменная, а не константа: значение приходит из settings.json при старте
+# (см. applicationDidFinishLaunching_) и меняется на лету при сохранении в
+# окне настроек — рестарт виджета для этого не нужен.
+#
+# Обнаружено эмпирически: с физической клавиатурой Cmd+C всегда доходил без
+# паузы (дефолт 0 мс), а через хоткей, назначенный кнопкой в Logitech
+# Options+, буфер иногда не менялся вовсе — при этом фронтальное приложение
+# и состояние клавиш-модификаторов в момент отправки были ИДЕНТИЧНЫ рабочему
+# случаю (см. историю в git). Похоже на гонку в очереди событий ОС: стороннее
+# ПО, видимо, эмулирует комбинацию не так, как настоящая клавиатура, и наш
+# Cmd+C иногда улетает раньше, чем система доразгребёт его собственную
+# последовательность. 50 мс убирало проблему стабильно в этом случае — но это
+# не доказанная причина, а дешёвая практическая мера, и не всем нужна, поэтому
+# дефолт для новых профилей — 0.
+_copy_delay_ms = hotkey.DEFAULT_COPY_DELAY_MS
+
+
+def _wait_before_copy() -> None:
+    if _copy_delay_ms:
+        time.sleep(_copy_delay_ms / 1000.0)
+
+
 def _post_copy_keystroke() -> tuple[bool, int]:
     """Симулирует Cmd+C во фронтовом приложении — тому, что было активно ДО
     открытия попапа. Порядок критичен: если сперва активировать наше
@@ -432,6 +455,7 @@ class AppDelegate(NSObject):
     def applicationDidFinishLaunching_(self, _notification):
         self._corrector_cache = None
         self._suggestion_generation = 0
+        self._popover_generation = 0  # см. _open_popover/_on_clipboard_copied
         self._prefilled = ("", "", "")  # что подставили из буфера — см. _prefill_and_remember
         self._context = None  # слова вокруг выделения — см. _read_selection_context
         self.settings_window = None
@@ -452,6 +476,9 @@ class AppDelegate(NSObject):
         if not hotkey.register(self.hotkeyPressed, keycode, modifiers):
             log.warning("не удалось занять хоткей %s — комбинация уже занята",
                         hotkey.describe(keycode, modifiers))
+
+        global _copy_delay_ms
+        _copy_delay_ms = hotkey.load_copy_delay_ms()
 
         # Просим Accessibility явно при старте — иначе симуляция Cmd+C в
         # _post_copy_keystroke() молча ничего не делает, и это неотличимо от
@@ -581,7 +608,7 @@ class AppDelegate(NSObject):
         quit_item.setTarget_(NSApplication.sharedApplication())
 
     def _build_settings_window(self):
-        rect = NSMakeRect(0, 0, 300, 132)
+        rect = NSMakeRect(0, 0, 300, 216)
         self.settings_window = NSWindow.alloc().initWithContentRect_styleMask_backing_defer_(
             rect, NSWindowStyleMaskTitled | NSWindowStyleMaskClosable,
             NSBackingStoreBuffered, False,
@@ -591,18 +618,31 @@ class AppDelegate(NSObject):
         content = self.settings_window.contentView()
 
         label = _text("Хоткей для попапа — клик по полю, затем комбинация:",
-                      16, 92, 268, 30, 11, NSColor.secondaryLabelColor())
+                      16, 170, 268, 30, 11, NSColor.secondaryLabelColor())
         content.addSubview_(label)
 
-        self.hotkey_field = _HotkeyField.alloc().initWithFrame_(NSMakeRect(16, 58, 268, 26))
+        self.hotkey_field = _HotkeyField.alloc().initWithFrame_(NSMakeRect(16, 136, 268, 26))
         self.hotkey_field.setup_(self)
         content.addSubview_(self.hotkey_field)
+
+        delay_label = _text(
+            "Задержка перед копированием, мс — 0 обычно ок, ~50 для "
+            "Logitech Options+:",
+            16, 92, 268, 30, 11, NSColor.secondaryLabelColor())
+        content.addSubview_(delay_label)
+
+        # Без setDelegate_(self): тот же делегат, что у полей попапа, ловит
+        # Enter как «применить правило коррекции» (control_textView_do
+        # CommandBySelector_) — здесь это просто число, чужая логика ни к
+        # чему, а из-за общего делегата Enter тут дёрнул бы _apply_rule().
+        self.delay_field = _field(16, 58, 268, "0")
+        content.addSubview_(self.delay_field)
 
         save_btn = NSButton.alloc().initWithFrame_(NSMakeRect(16, 16, 268, 28))
         save_btn.setTitle_("Сохранить")
         save_btn.setBezelStyle_(NSBezelStyleRounded)
         save_btn.setTarget_(self)
-        save_btn.setAction_("saveHotkey:")
+        save_btn.setAction_("saveSettings:")
         content.addSubview_(save_btn)
 
         self._refresh_settings_window()
@@ -611,17 +651,30 @@ class AppDelegate(NSObject):
         keycode, modifiers = hotkey.load()
         self._pending_hotkey = (keycode, modifiers)
         self.hotkey_field.setStringValue_(hotkey.describe(keycode, modifiers))
+        self.delay_field.setStringValue_(str(hotkey.load_copy_delay_ms()))
 
     def hotkeyRecorded_modifiers_(self, keycode, modifiers):
         self._pending_hotkey = (keycode, modifiers)
 
-    def saveHotkey_(self, _sender):
+    def saveSettings_(self, _sender):
         keycode, modifiers = self._pending_hotkey
         if not hotkey.register(self.hotkeyPressed, keycode, modifiers):
             self.hotkey_field.setStringValue_(
                 f"{hotkey.describe(keycode, modifiers)} — занято другим приложением")
             return
         hotkey.save(keycode, modifiers)
+
+        # Невалидный ввод (пусто, буквы, отрицательное) молча трактуем как
+        # «оставить как было» — это настройка на случай проблемы, а не то,
+        # где стоит блокировать сохранение хоткея из-за опечатки в цифре.
+        try:
+            ms = max(0, int(self.delay_field.stringValue().strip()))
+        except ValueError:
+            ms = hotkey.load_copy_delay_ms()
+        hotkey.save_copy_delay_ms(ms)
+        global _copy_delay_ms
+        _copy_delay_ms = ms
+
         self.settings_window.performClose_(None)
 
     def openSettings_(self, _sender):
@@ -657,6 +710,7 @@ class AppDelegate(NSObject):
         if self.popover.isShown():
             self.popover.performClose_(None)
             return
+        _wait_before_copy()
         trusted, before = _post_copy_keystroke()
         context = _read_selection_context()
         NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
@@ -666,12 +720,22 @@ class AppDelegate(NSObject):
         if self.popover.isShown():
             self.popover.performClose_(None)
             return
+        _wait_before_copy()
         trusted, before = _post_copy_keystroke()
         context = _read_selection_context()
         self._open_popover(trusted=trusted, before_count=before, context=context)
 
     def _open_popover(self, trusted: bool = True, before_count: int = -1,
                       context: str | None = None):
+        # Новое открытие — новое поколение: без этого фоновый поток,
+        # ждущий смену буфера от ПРЕДЫДУЩЕГО нажатия (см. _on_clipboard_copied),
+        # ничем не отличал бы «это открытие ещё актуально» от «уже открыли
+        # заново» и мог дозаполнить текущий попап словом из прошлого нажатия,
+        # если предыдущая проверка буфера досчитывает уже после того, как
+        # новый попап открылся (обнаружено живьём при быстрых повторных
+        # нажатиях хоткея).
+        self._popover_generation += 1
+        generation = self._popover_generation
         # Снимок контекста делается ДО активации своего процесса (см.
         # hotkeyPressed/_toggle_popover) — здесь только сохраняем его на всё
         # время жизни попапа, читать заново уже поздно: фокус ушёл нам.
@@ -686,7 +750,8 @@ class AppDelegate(NSObject):
         button = self.status_item.button()
         # Список от прошлого открытия относился к другому слову — убираем до
         # показа, иначе попап на мгновение мелькнёт чужими вариантами.
-        self._clear_variants()
+        # animated=False: попап ещё не показан, анимировать нечего.
+        self._clear_variants(animated=False)
         self.popover.showRelativeToRect_ofView_preferredEdge_(
             button.bounds(), button, NSMaxYEdge
         )
@@ -695,7 +760,9 @@ class AppDelegate(NSObject):
         if window is not None:
             window.makeFirstResponder_(focus)
         if trusted:
-            _watch_clipboard_change(before_count, self._on_clipboard_copied)
+            _watch_clipboard_change(
+                before_count,
+                lambda changed: self._on_clipboard_copied(generation, changed))
         else:
             # Гранта точно нет — ждать смены буфера незачем, но и ругаться
             # незачем, если из буфера уже что-то подставилось.
@@ -731,7 +798,7 @@ class AppDelegate(NSObject):
             return
         self.status_label.setStringValue_(hint)
 
-    def _on_clipboard_copied(self, changed: bool) -> None:
+    def _on_clipboard_copied(self, generation: int, changed: bool) -> None:
         """Реакция на результат симуляции Cmd+C.
 
         changed=True — буфер сменился, выделение скопировалось: перезаполняем
@@ -741,7 +808,16 @@ class AppDelegate(NSObject):
         и приложение проигнорировало Cmd+C. Реже — сломана подпись .app и TCC
         не сопоставляет процесс с грантом, но это ловится `bash status.sh`,
         а не догадками здесь, поэтому в UI про подпись молчим.
+
+        `generation` — снимок _popover_generation на момент ЭТОГО открытия
+        (см. _open_popover). Проверка ниже отсекает случай, пойманный живьём:
+        быстрое повторное нажатие хоткея закрывает и открывает попап заново
+        раньше, чем 250мс-ожидание буфера от ПРЕДЫДУЩЕГО нажатия успевает
+        досчитать — без проверки поколения этот поздний колбэк молча
+        дозаполнял бы уже другой, новый попап словом из прошлого нажатия.
         """
+        if generation != self._popover_generation:
+            return
         if self.popover is None or not self.popover.isShown():
             return
         if not changed:
@@ -878,18 +954,33 @@ class AppDelegate(NSObject):
         self.status_label.setStringValue_(
             f"вариантов: {len(self.variants)} — ↑↓ выбрать, Enter применить")
 
-    def _clear_variants(self) -> None:
+    def _clear_variants(self, animated: bool = True) -> None:
         self.variants = []
         self.variant_index = -1
-        self._relayout_rows(0)
+        self._relayout_rows(0, animated=animated)
 
-    def _relayout_rows(self, n: int) -> None:
+    def _relayout_rows(self, n: int, animated: bool = True) -> None:
         """Переставляет попап под `n` строк вариантов.
 
         Все вьюхи спозиционированы абсолютно, а начало координат у AppKit —
         снизу слева, поэтому смена высоты сдвигает вообще всё. Отсюда реестр
         `_placed`: пройтись по нему дешевле и надёжнее, чем держать
         autoresizing-маски на два десятка контролов.
+
+        `animated` временно ничего не делает — тут стояла анимация выезжания
+        вариантов (плавный resize попапа + fade-in строк через
+        NSAnimationContext), но после неё перестало подтягиваться выделенное
+        слово при быстрых повторных нажатиях хоткея. Не доказано, что дело
+        именно в этом коде, а не в совпадении по времени, — отключено для
+        проверки гипотезы, сам код анимации в git не сохранён (откатили до
+        первого коммита этого файла). Вероятная причина, если будешь
+        восстанавливать: `header1`/`fields` (поля слова) тоже входят в
+        `_placed` и потому тоже двигались `.animator().setFrame_()` при
+        каждом изменении числа вариантов — хотя визуально двигаться должны
+        только сами строки вариантов. Первый кандидат на фикс — исключить
+        `header1`/`fields` из анимируемого прохода по `_placed`, оставив
+        анимацию только `variant_buttons`. Параметр оставлен, чтобы не
+        трогать вызовы `_clear_variants`.
         """
         height, y = _layout(n)
         self.popover.setContentSize_((WIDTH, height))
@@ -911,6 +1002,7 @@ class AppDelegate(NSObject):
                 b.setFrame_(NSMakeRect(PAD, y["variants"] + (n - 1 - i) * VAR_H,
                                        FULL_W, VAR_H))
                 b.setHidden_(False)
+                b.setAlphaValue_(1.0)
             else:
                 b.setHidden_(True)
 
@@ -981,8 +1073,13 @@ class AppDelegate(NSObject):
         self.status_label.setStringValue_(f"{prefix}пересобираю словарь (~10с)")
 
         def worker():
+            # encoding явно, не text=True: тот берёт кодировку из локали
+            # процесса, а внутри собранного .app она разъезжается на ascii
+            # (см. Fatal Python error про init_fs_encoding в этом же .app) —
+            # вывод build_lexicon.py содержит кириллицу и падал бы
+            # UnicodeDecodeError'ом ровно на первом же русском слове.
             proc = subprocess.run([PYTHON3, str(PROJECT_DIR / "build_lexicon.py")],
-                                  capture_output=True, text=True)
+                                  capture_output=True, encoding="utf-8")
             if proc.returncode != 0:
                 log.warning("build_lexicon.py упал (%d): %s",
                            proc.returncode, proc.stderr[-2000:])
