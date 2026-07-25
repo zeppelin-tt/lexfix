@@ -27,14 +27,22 @@ app, from any source (typed, pasted, dictated).
   offline, no data leaves the machine) to (a) rerank dictionary candidates,
   (b) guess spellings for words not in any dictionary at all — reasoning
   about spelling mistakes and transliteration, not just rearranging letters.
+- When the frontmost app exposes standard Accessibility text APIs, the
+  free-guess layer also sees a few words of context on each side of your
+  selection — read via `kAXValue`/`kAXSelectedTextRange`, not the
+  clipboard, at the moment the popup opens. This measurably changes what
+  it guesses; apps that don't expose that API (some browsers, some
+  Electron apps) just get context-free guesses, same as before.
 - Shows up to 6 ranked variants, each labeled with its source and trust
   level: `правило` (a rule you confirmed before), `словарь` (dictionary
   hit), `догадка` (LLM guess — unverified, shown for you to judge).
 - One Enter applies the top pick; ↑↓ or a click picks another; typing over
-  the field ignores all suggestions.
-- A second field lets you teach it a brand-new proper noun (not a
-  correction — this makes the fuzzy-match layer aware the word exists at
-  all, so future typos in it get caught automatically).
+  the field ignores all suggestions (the highlighted variant is deselected
+  the moment you start typing your own text, so it's never ambiguous which
+  one Enter would apply).
+- A second field lets you teach it a brand-new proper noun — a
+  meaningfully different action from a correction, see
+  [Fix vs. teach](#fix-vs-teach-two-different-actions) below.
 
 ## Requirements
 
@@ -183,7 +191,46 @@ venv/bin/python3 lex.py list                          # your rules
 
 `fix` vs `add`: `fix` is one hard mapping for a recurring, specific typo.
 `add` teaches the *name itself*, after which the fuzzy layer catches *any*
-typo in it on its own.
+typo in it on its own. Details and a non-obvious side effect below.
+
+## Fix vs. teach: two different actions
+
+The popup's two sections look symmetric — both take a word and an Enter —
+but they write to different files and do different things underneath.
+
+| | Top: "Исправить ошибку" (fix) | Bottom: "Выучить имя" (teach) |
+|---|---|---|
+| Writes to | `learned.json` | `tech_terms.txt` → rebuilds `lexicon.json` |
+| CLI equivalent | `lex.py fix` | `lex.py add` |
+| Effect | One hard mapping: this exact wrong spelling always becomes this exact right one | The name becomes known to *every* matching layer at once: exact, fuzzy, transliteration-skeleton, and LLM reranking |
+
+**Fix** is a standing order: "if you ever see X again, it's Y, don't ask."
+Good for a specific, recurring typo with one correct answer.
+
+**Teach** is broader, and for a genuinely new name it's usually the better
+choice — because it goes through every matching layer, it also fixes
+typos in that name you haven't seen yet. Teaching `Nine Inch Nails` once
+made `nine inch neils` self-correct with no rule written for that specific
+misspelling; the fuzzy-match layer (`difflib`, ratio ≥ 0.75) caught it on
+its own.
+
+Teaching a name also has a side effect worth knowing about: rebuilding the
+dictionary re-scans the new name against ~103k Russian word forms
+(`ru_stop.txt`) for transliteration collisions. If it sounds enough like
+an existing Russian word (`Flutter` vs. «флаттер», `Docker` vs. «докер»),
+that word gets flagged in `homonyms.txt` — and from then on, it's resolved
+by the LLM from sentence context every time, instead of ever being
+force-corrected. This is deliberate, not a bug to route around: a homonym
+can't get a hard `fix` rule without permanently breaking one of its two
+meanings, so teaching leaves the decision to context instead of picking a
+side up front. If a specific homonym annoys you enough that you'd rather
+force one meaning always, `lex.py fix` overrides the LLM's per-sentence
+judgment for that word — but that's an explicit choice to make per word,
+never automatic.
+
+Rule of thumb: **typos go in Fix, names go in Teach.** Don't teach a
+misspelling — it pollutes the dictionary and starts attracting fuzzy
+matches of its own.
 
 ## Customizing the dictionary
 
@@ -237,6 +284,13 @@ spelling it thinks you meant (`aifel tover` → `Eiffel Tower`), because the
 guess is only ever *displayed*, never applied, until you click it and hit
 Enter. The boundary isn't "how good is the model" — it's "does the result
 get applied without confirmation."
+
+This free-guess layer is also the one that gets surrounding-context
+awareness (see [What it does](#what-it-does) above): a few words on each
+side of your selection, read via the Accessibility API before the popup
+takes focus, passed alongside the word itself. Dictionary matches
+(tiers 1–2) never see this context and don't need to — they're exact or
+near-exact string matches, context wouldn't change the answer.
 
 Cyrillic homonyms (`докер`/`Docker`, `питон`/`Python`, `флаттер`/`Flutter`)
 are resolved by the LLM from sentence context and are intentionally never

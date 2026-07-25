@@ -100,7 +100,15 @@ from AppKit import (
 from ApplicationServices import (
     AXIsProcessTrusted,
     AXIsProcessTrustedWithOptions,
+    AXUIElementCopyAttributeValue,
+    AXUIElementCreateSystemWide,
+    AXValueGetValue,
+    kAXFocusedApplicationAttribute,
+    kAXFocusedUIElementAttribute,
+    kAXSelectedTextRangeAttribute,
     kAXTrustedCheckOptionPrompt,
+    kAXValueAttribute,
+    kAXValueCFRangeType,
 )
 from Foundation import NSAttributedString, NSMutableAttributedString, NSObject
 from PyObjCTools import AppHelper
@@ -306,6 +314,68 @@ def _watch_clipboard_change(before_count: int, callback) -> None:
     threading.Thread(target=worker, daemon=True).start()
 
 
+CONTEXT_WORDS = 3           # слов с каждой стороны выделения — просим у Accessibility
+CONTEXT_WINDOW_CHARS = 200  # берём с запасом до разбиения на слова, не весь документ
+
+
+def _read_selection_context(n_words: int = CONTEXT_WORDS) -> str | None:
+    """Слова вокруг текущего выделения в активном приложении — через
+    Accessibility API, без похода в буфер обмена (тот отдаёт только само
+    выделение, не то, что вокруг). Звать до активации своего процесса —
+    иначе «активным приложением» окажемся уже мы сами, и все запросы уйдут
+    в наш собственный, пустой UI.
+
+    Работает не везде: многие веб-страницы в браузере и часть Electron-
+    приложений не реализуют kAXValue/kAXSelectedTextRange для текстовых
+    полей. Любая неудача — тихо None, обычный путь (просто буфер обмена,
+    без контекста) продолжает работать как раньше.
+    """
+    try:
+        system = AXUIElementCreateSystemWide()
+        err, app = AXUIElementCopyAttributeValue(
+            system, kAXFocusedApplicationAttribute, None)
+        if err or app is None:
+            return None
+        err, element = AXUIElementCopyAttributeValue(
+            app, kAXFocusedUIElementAttribute, None)
+        if err or element is None:
+            return None
+        err, full_text = AXUIElementCopyAttributeValue(
+            element, kAXValueAttribute, None)
+        if err or not isinstance(full_text, str) or not full_text:
+            return None
+        err, range_value = AXUIElementCopyAttributeValue(
+            element, kAXSelectedTextRangeAttribute, None)
+        if err or range_value is None:
+            return None
+        ok, rng = AXValueGetValue(range_value, kAXValueCFRangeType, None)
+        if not ok:
+            return None
+        loc, length = int(rng[0]), int(rng[1])
+        if loc < 0 or loc > len(full_text) or length < 0:
+            return None
+        end = min(loc + length, len(full_text))
+
+        # Локальное окно вокруг выделения, а не весь документ целиком — в
+        # веб-редакторах kAXValue может отдать содержимое на десятки тысяч
+        # символов, и разбивать его на слова только ради трёх с каждой
+        # стороны незачем.
+        before = full_text[max(0, loc - CONTEXT_WINDOW_CHARS):loc]
+        after = full_text[end:end + CONTEXT_WINDOW_CHARS]
+        selected = full_text[loc:end].strip()
+
+        before_words = before.split()[-n_words:]
+        after_words = after.split()[:n_words]
+        if not before_words and not after_words:
+            return None  # выделена вся фраза целиком — окружения нет
+
+        parts = before_words + ([selected] if selected else []) + after_words
+        return " ".join(parts).strip() or None
+    except Exception:  # noqa: BLE001 — контекст опционален, виджет не должен падать
+        log.exception("не смог прочитать контекст через Accessibility")
+        return None
+
+
 def _field(x: float, y: float, w: float, placeholder: str) -> NSTextField:
     f = NSTextField.alloc().initWithFrame_(NSMakeRect(x, y, w, H_FIELD))
     f.setFont_(NSFont.systemFontOfSize_(12))
@@ -363,6 +433,7 @@ class AppDelegate(NSObject):
         self._corrector_cache = None
         self._suggestion_generation = 0
         self._prefilled = ("", "", "")  # что подставили из буфера — см. _prefill_and_remember
+        self._context = None  # слова вокруг выделения — см. _read_selection_context
         self.settings_window = None
         self.status_item = NSStatusBar.systemStatusBar().statusItemWithLength_(
             NSVariableStatusItemLength
@@ -587,17 +658,24 @@ class AppDelegate(NSObject):
             self.popover.performClose_(None)
             return
         trusted, before = _post_copy_keystroke()
+        context = _read_selection_context()
         NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
-        self._open_popover(trusted=trusted, before_count=before)
+        self._open_popover(trusted=trusted, before_count=before, context=context)
 
     def _toggle_popover(self):
         if self.popover.isShown():
             self.popover.performClose_(None)
             return
         trusted, before = _post_copy_keystroke()
-        self._open_popover(trusted=trusted, before_count=before)
+        context = _read_selection_context()
+        self._open_popover(trusted=trusted, before_count=before, context=context)
 
-    def _open_popover(self, trusted: bool = True, before_count: int = -1):
+    def _open_popover(self, trusted: bool = True, before_count: int = -1,
+                      context: str | None = None):
+        # Снимок контекста делается ДО активации своего процесса (см.
+        # hotkeyPressed/_toggle_popover) — здесь только сохраняем его на всё
+        # время жизни попапа, читать заново уже поздно: фокус ушёл нам.
+        self._context = context
         # Показываем сразу с тем, что уже лежит в буфере, и не ждём симуляцию
         # Cmd+C. Ждать нельзя по двум причинам: попап подвисал бы на четверть
         # секунды на каждый хоткей, а главное — ручное копирование (выделил,
@@ -711,7 +789,7 @@ class AppDelegate(NSObject):
             return self.field_name
 
         self.field_wrong.setStringValue_(word)
-        self._request_suggestion(word)
+        self._request_suggestion(word, self._context)
         return self.field_wrong
 
     def _homonym_name(self, word: str) -> str | None:
@@ -747,14 +825,17 @@ class AppDelegate(NSObject):
 
     # --- авто-предложение от LLM -------------------------------------------
 
-    def _request_suggestion(self, word: str) -> None:
+    def _request_suggestion(self, word: str, context: str | None = None) -> None:
         """Нейросетка подбирает варианты замены, пока пользователь смотрит на
         попап: похожие имена из словаря и свои догадки про опечатку или
         транслитерацию (см. `corrector.suggest_variants`).
 
-        Без контекста фразы (виджету известно только само слово) догадки
-        слабее, чем во время транскрипции, где LLM видит фразу целиком.
-        Поэтому это список-черновик: лучший вариант подставляется в поле
+        `context` — слова вокруг выделения, добытые через Accessibility API
+        (см. `_read_selection_context`) в момент открытия попапа, ДО того как
+        мы забрали фокус себе. Без него виджету известно только само слово,
+        и догадки заметно слабее, чем во время транскрипции, где LLM видит
+        фразу целиком — с контекстом это подтягивается ближе к тому уровню.
+        Список в любом случае черновик: лучший вариант подставляется в поле
         сразу, чтобы частый случай «угадала с первого раза» закрывался одним
         Enter, а остальные ждут ↑↓ или клика.
         """
@@ -765,7 +846,8 @@ class AppDelegate(NSObject):
         def worker():
             corrector = self._corrector()
             try:
-                variants = corrector.suggest_variants(word) if corrector else []
+                variants = (corrector.suggest_variants(word, context=context or "")
+                           if corrector else [])
             except Exception:  # noqa: BLE001 — виджет не должен падать из-за сети/Ollama
                 log.exception("не смог получить варианты от нейросети")
                 variants = []
@@ -811,7 +893,16 @@ class AppDelegate(NSObject):
         """
         height, y = _layout(n)
         self.popover.setContentSize_((WIDTH, height))
-        self.popover_view_controller.view().setFrame_(NSMakeRect(0, 0, WIDTH, height))
+        # Origin content-view'а трогать нельзя — его ставит сам NSPopover, и
+        # там не ноль: окно попапа больше контента на рамку со стрелкой (13pt
+        # с каждой стороны), поэтому вьюха живёт со смещением (13, 13).
+        # Обнуление origin сдвигало всё содержимое на эти 13pt влево и вниз —
+        # попап выглядел «съехавшим», а нижняя строка статуса обрезалась.
+        # Меняем только размер, оставляя смещение таким, каким его назначила
+        # система.
+        view = self.popover_view_controller.view()
+        origin = view.frame().origin
+        view.setFrame_(NSMakeRect(origin.x, origin.y, WIDTH, height))
         for v, row, x, w, h, dy in self._placed:
             v.setFrame_(NSMakeRect(x, y[row] + dy, w, h))
         for i, b in enumerate(self.variant_buttons):
@@ -906,6 +997,19 @@ class AppDelegate(NSObject):
         else:
             self.status_label.setStringValue_(
                 f"✗ {prefix}пересборка упала, смотри lex-widget.err.log")
+
+    def controlTextDidChange_(self, notification):
+        """Ручная правка «как надо» снимает подсветку варианта — иначе непонятно,
+        что применит Enter: подсвеченный вариант или то, что реально вписано.
+        `setStringValue_` (наша же подстановка при выборе/клике) этот делегатский
+        метод не вызывает — он реагирует только на ввод с клавиатуры, так что
+        собственный же _select_variant его не задевает."""
+        if notification.object() is not self.field_right or self.variant_index == -1:
+            return
+        current = str(self.field_right.stringValue())
+        if not self.variants or current != self.variants[self.variant_index][0]:
+            self.variant_index = -1
+            self._paint_variants()
 
     def control_textView_doCommandBySelector_(self, control, _text_view, selector):
         """Enter применяет ту секцию, в поле которой он нажат.
