@@ -153,7 +153,11 @@ bash build_app.sh
 # ── 7. Ollama (опционально — LLM-варианты в попапе) ───────────────────────
 say "Ollama (опционально)"
 if command -v ollama >/dev/null 2>&1; then
-    if ollama list 2>/dev/null | grep -q "qwen2.5:7b"; then
+    # Захватываем вывод в переменную, а не льём напрямую в `grep -q`: под
+    # pipefail ранний выход grep после первого совпадения шлёт SIGPIPE
+    # процессу слева, и пайплайн считается упавшим даже при найденном матче.
+    ollama_models="$(ollama list 2>/dev/null || true)"
+    if grep -q "qwen2.5:7b" <<< "$ollama_models"; then
         echo "ollama + qwen2.5:7b уже есть — LLM-варианты в попапе доступны"
     else
         echo "Ollama есть, модели qwen2.5:7b нет. Поставить сейчас (~4.7 ГБ)?"
