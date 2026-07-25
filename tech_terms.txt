@@ -1,0 +1,85 @@
+# Собственные имена, которые Максим диктует, но которых нет в скробблах.
+# Одна строка — один термин, регистр канонический. Правится руками,
+# после правки: python3 build_lexicon.py
+
+# --- языки и рантаймы ---
+Python
+JavaScript
+TypeScript
+Golang
+Dart
+Flutter
+Node.js
+Swift
+Kotlin
+Rust
+
+# --- инфра ---
+Docker
+Kubernetes
+Nginx
+PostgreSQL
+Redis
+SQLite
+Linux
+Ubuntu
+Debian
+macOS
+OpenWRT
+LaunchAgent
+launchd
+systemd
+SSH
+VPN
+WireGuard
+Reality
+Hysteria
+sing-box
+Podkop
+NanoPi
+Synology
+
+# --- сервисы ---
+GitHub
+GitLab
+Vercel
+Supabase
+Cloudflare
+Telegram
+Vikunja
+Plex
+Obsidian
+Discogs
+MusicBrainz
+Last.fm
+Spotify
+Bandcamp
+Ableton
+
+# --- AI ---
+Claude
+Anthropic
+OpenAI
+Ollama
+Whisper
+GigaAM
+Qwen
+LLaMA
+Gemini
+Spokenly
+
+# --- фреймворки и форматы ---
+FastAPI
+Uvicorn
+React
+Vue
+Django
+Flask
+JSON
+YAML
+Markdown
+protobuf
+gRPC
+REST
+API
+Nine Inch Nails

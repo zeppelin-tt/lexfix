@@ -1,0 +1,20 @@
+# venv и сборочные артефакты
+venv/
+build/
+dist/
+__pycache__/
+*.pyc
+
+# сгенерированные/накопленные локально при установке — не код, регенерируются
+# (build_lexicon.py) или растут сами (learned.json от использования)
+lexicon.json
+ru_stop.txt
+homonyms.txt
+learned.json
+learned.json.lock
+
+# упакованные инсталляторы (собираются на месте, в репозиторий не кладём)
+*.dmg
+
+# системный мусор
+.DS_Store

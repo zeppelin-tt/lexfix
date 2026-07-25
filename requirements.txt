@@ -1,0 +1,5 @@
+pyobjc-framework-Cocoa
+pyobjc-framework-ApplicationServices
+pyobjc-framework-Quartz
+pyobjc-framework-CoreText
+py2app

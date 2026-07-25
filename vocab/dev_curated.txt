@@ -1,0 +1,389 @@
+# Программирование: фреймворки, библиотеки, инструменты, сервисы.
+# Кураторский список — не затирается fetch_sources.py, правится руками.
+# Языки программирования приезжают отдельно (dev_languages.txt, GitHub Linguist).
+
+# --- фронтенд ---
+React
+React Native
+Vue
+Vue.js
+Angular
+Svelte
+SvelteKit
+Next.js
+Nuxt
+Remix
+Astro
+Solid.js
+Preact
+Ember
+Backbone
+jQuery
+Redux
+MobX
+Zustand
+Tailwind
+Tailwind CSS
+Bootstrap
+Material UI
+Chakra UI
+shadcn
+Sass
+Less
+PostCSS
+Webpack
+Vite
+Rollup
+Parcel
+esbuild
+Turbopack
+Babel
+ESLint
+Prettier
+Storybook
+Three.js
+D3.js
+Chart.js
+Recharts
+Framer Motion
+GSAP
+
+# --- бэкенд ---
+Node.js
+Deno
+Bun
+Express
+Fastify
+NestJS
+Koa
+Django
+Flask
+FastAPI
+Starlette
+Pyramid
+Tornado
+Rails
+Ruby on Rails
+Sinatra
+Laravel
+Symfony
+Spring
+Spring Boot
+Quarkus
+Micronaut
+Gin
+Echo
+Fiber
+Actix
+Axum
+Rocket
+Phoenix
+Elixir
+ASP.NET
+Blazor
+Uvicorn
+Gunicorn
+Celery
+RabbitMQ
+Kafka
+NATS
+gRPC
+GraphQL
+Apollo
+tRPC
+Prisma
+SQLAlchemy
+Alembic
+Hibernate
+Sequelize
+TypeORM
+Drizzle
+
+# --- базы данных ---
+PostgreSQL
+MySQL
+MariaDB
+SQLite
+MongoDB
+Redis
+Valkey
+Cassandra
+ScyllaDB
+DynamoDB
+Elasticsearch
+OpenSearch
+ClickHouse
+DuckDB
+Neo4j
+InfluxDB
+TimescaleDB
+CockroachDB
+Firebase
+Firestore
+Supabase
+PlanetScale
+Pinecone
+Weaviate
+Qdrant
+Chroma
+Milvus
+pgvector
+
+# --- инфраструктура ---
+Docker
+Docker Compose
+Kubernetes
+Helm
+Podman
+Containerd
+Terraform
+OpenTofu
+Pulumi
+Ansible
+Puppet
+Chef
+Vagrant
+Nomad
+Consul
+Vault
+Nginx
+Apache
+Caddy
+Traefik
+HAProxy
+Envoy
+Istio
+Linkerd
+Prometheus
+Grafana
+Loki
+Jaeger
+OpenTelemetry
+Datadog
+Sentry
+Kibana
+Logstash
+Fluentd
+Systemd
+Supervisor
+PM2
+
+# --- облака и хостинг ---
+AWS
+Amazon Web Services
+Azure
+Google Cloud
+DigitalOcean
+Linode
+Hetzner
+Vultr
+Cloudflare
+Cloudflare Workers
+Vercel
+Netlify
+Heroku
+Railway
+Render
+Fly.io
+Lambda
+S3
+EC2
+CloudFront
+
+# --- инструменты разработки ---
+Git
+GitHub
+GitLab
+Bitbucket
+GitHub Actions
+Jenkins
+CircleCI
+Travis CI
+ArgoCD
+Drone
+VS Code
+Visual Studio
+IntelliJ IDEA
+PyCharm
+WebStorm
+GoLand
+Android Studio
+Xcode
+Neovim
+Emacs
+Sublime Text
+Zed
+Cursor
+JetBrains
+Postman
+Insomnia
+Swagger
+OpenAPI
+Figma
+Jira
+Confluence
+Notion
+Linear
+Slack
+Discord
+
+# --- языки и рантаймы: экосистемные имена ---
+TypeScript
+JavaScript
+CoffeeScript
+WebAssembly
+WASM
+JVM
+CPython
+PyPy
+V8
+LLVM
+GCC
+Clang
+Cargo
+npm
+pnpm
+Yarn
+pip
+Poetry
+uv
+Maven
+Gradle
+Composer
+NuGet
+Homebrew
+
+# --- тестирование ---
+Jest
+Vitest
+Mocha
+Chai
+Cypress
+Playwright
+Selenium
+Puppeteer
+pytest
+unittest
+JUnit
+TestNG
+RSpec
+Testify
+k6
+Locust
+JMeter
+
+# --- data / ML ---
+NumPy
+Pandas
+Polars
+SciPy
+scikit-learn
+Matplotlib
+Seaborn
+Plotly
+Jupyter
+JupyterLab
+PyTorch
+TensorFlow
+Keras
+JAX
+Flax
+Hugging Face
+Transformers
+Diffusers
+LangChain
+LlamaIndex
+Ollama
+vLLM
+llama.cpp
+ONNX
+CUDA
+cuDNN
+OpenCV
+spaCy
+NLTK
+Gensim
+XGBoost
+LightGBM
+CatBoost
+Airflow
+Dagster
+dbt
+Spark
+Hadoop
+Flink
+Databricks
+Snowflake
+BigQuery
+
+# --- AI-модели и сервисы ---
+Claude
+Anthropic
+ChatGPT
+OpenAI
+Gemini
+DeepSeek
+Mistral
+LLaMA
+Qwen
+Whisper
+Stable Diffusion
+Midjourney
+Copilot
+GigaAM
+GigaChat
+YandexGPT
+
+# --- мобильная разработка ---
+Flutter
+Dart
+SwiftUI
+UIKit
+Jetpack Compose
+Kotlin Multiplatform
+Xamarin
+Ionic
+Capacitor
+Expo
+
+# --- прочее ---
+Linux
+Ubuntu
+Debian
+Fedora
+CentOS
+Arch Linux
+Alpine
+NixOS
+FreeBSD
+Windows
+macOS
+Android
+iOS
+WSL
+Bash
+Zsh
+Fish
+PowerShell
+tmux
+SSH
+OpenSSH
+WireGuard
+OpenVPN
+Nmap
+Wireshark
+curl
+Wget
+jq
+ffmpeg
+ImageMagick
+Pandoc
+LaTeX
+Markdown
+YAML
+JSON
+TOML
+XML
+Protobuf
+Avro
+Parquet

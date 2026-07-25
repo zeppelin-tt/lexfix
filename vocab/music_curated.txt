@@ -1,0 +1,226 @@
+# Музыкальное железо: производители и знаковые модели.
+# Кураторский список — не затирается fetch_sources.py, правится руками.
+
+# --- производители синтезаторов и драм-машин ---
+Moog
+Roland
+Korg
+Yamaha
+Sequential
+Dave Smith Instruments
+Oberheim
+ARP
+Buchla
+Serge
+EMS
+Elektron
+Arturia
+Novation
+Waldorf
+Access
+Clavia
+Nord
+Vermona
+Doepfer
+Make Noise
+Mutable Instruments
+Teenage Engineering
+Behringer
+Modal Electronics
+Dreadbox
+Erica Synths
+Intellijel
+Expert Sleepers
+ALM Busy Circuits
+Verbos Electronics
+Instruo
+4ms
+Noise Engineering
+Xaoc Devices
+Befaco
+Tiptop Audio
+Malekko
+Pittsburgh Modular
+Rossum Electro-Music
+Squarp
+Polyend
+Sonicware
+Casio
+Ensoniq
+E-mu
+Fairlight
+Synclavier
+Kurzweil
+Alesis
+Akai
+Studiologic
+Hydrasynth
+ASM
+UDO Audio
+Black Corporation
+Baloran
+Analogue Solutions
+Future Retro
+Cwejman
+Metasonix
+Folktek
+Bastl Instruments
+Landscape
+OTO Machines
+Chase Bliss
+Empress Effects
+Strymon
+Eventide
+Meris
+Hologram Electronics
+Gamechanger Audio
+Death By Audio
+Electro-Harmonix
+Boss
+Line 6
+Fractal Audio
+Neural DSP
+Universal Audio
+Focusrite
+RME
+MOTU
+Apogee
+Antelope Audio
+Presonus
+SSL
+Neve
+API
+Manley
+Rupert Neve Designs
+
+# --- знаковые модели ---
+Minimoog
+Minimoog Model D
+Moog Muse
+Moog Matriarch
+Moog Subsequent
+Moog Grandmother
+Moog Mother-32
+Moog Voyager
+Memorymoog
+Polymoog
+Taurus
+Prophet-5
+Prophet-6
+Prophet-12
+Prophet Rev2
+OB-6
+OB-Xa
+OB-X8
+Jupiter-8
+Jupiter-4
+Juno-106
+Juno-60
+Juno-6
+JX-3P
+JD-800
+JD-XA
+SH-101
+SH-2
+System-100
+System-700
+TR-808
+TR-909
+TR-707
+TR-606
+TB-303
+TR-8S
+MC-707
+MC-101
+SP-404
+SP-1200
+MPC
+MPC60
+MPC2000
+MPC Live
+MS-20
+MS-10
+Polysix
+Mono/Poly
+Minilogue
+Monologue
+Prologue
+Wavestate
+Opsix
+Modwave
+Volca
+Electribe
+M1
+Triton
+Trinity
+Kronos
+DX7
+CS-80
+CS-60
+SY77
+Montage
+Reface
+Odyssey
+Pro Soloist
+2600
+Andromeda
+Micron
+Virus TI
+Blofeld
+Iridium
+Quantum
+Microwave
+Pulse
+Nord Lead
+Nord Stage
+Nord Drum
+Nord Wave
+Nordlead
+PPG Wave
+Wavetable
+Matrixbrute
+Microbrute
+Minibrute
+Polybrute
+Microfreak
+Keystep
+Beatstep
+Drumbrute
+Digitakt
+Digitone
+Octatrack
+Analog Four
+Analog Rytm
+Machinedrum
+Monomachine
+Syntakt
+Model:Cycles
+Model:Samples
+OP-1
+OP-Z
+OP-XY
+Pocket Operator
+Vermona Perfourmer
+Vermona Performer
+Vermona DRM1
+Peak
+Summit
+Bass Station
+Circuit
+Launchpad
+Push
+Maschine
+Komplete Kontrol
+Fantom
+Integra-7
+Solaris
+Schmidt
+Hydrasynth Deluxe
+Argon8
+Cobalt8
+Osmose
+Continuum
+Linnstrument
+Seaboard
+Haken
+Expressive E
