@@ -10,6 +10,7 @@ __pycache__/
 lexicon.json
 ru_stop.txt
 homonyms.txt
+ru_words.bin
 learned.json
 learned.json.lock
 

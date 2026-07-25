@@ -8,6 +8,7 @@
 Запуск: python3 build_lexicon.py
 """
 
+import array
 import gzip
 import json
 import os
@@ -16,6 +17,7 @@ from collections import Counter
 from pathlib import Path
 
 import translit
+from translit import ru_word_hash
 
 HERE = Path(__file__).parent
 # Слой музыкантов — опциональный и личный: он строится из истории прослушиваний
@@ -32,6 +34,7 @@ VOCAB = HERE / "vocab"
 OUT = HERE / "lexicon.json"
 RU_STOP_OUT = HERE / "ru_stop.txt"
 HOMONYMS_OUT = HERE / "homonyms.txt"
+RU_WORDS_OUT = HERE / "ru_words.bin"
 
 # Слово-омоним похоже на техтермин настолько, что стоит спросить у LLM,
 # что имелось в виду. Порог низкий намеренно: «питон»/python дают лишь 0.73,
@@ -152,6 +155,38 @@ def build_ru_stop(entries: dict) -> int:
     return len(hits)
 
 
+def build_ru_words() -> int:
+    """Компактный индекс «это вообще русское слово?» — вход слоя жаргона.
+
+    Отличается от ru_stop.txt задачей и потому охватом: ru_stop защищает от
+    подмены те слова, что похожи на имена из словаря (57k), а здесь нужен
+    противоположный вопрос — «такого слова в русском языке нет вовсе», и на
+    него отвечает только полный список словоформ (1.5 млн).
+
+    Хранится не строками, а отсортированными 64-битными хешами: набор строк
+    занял бы 266 MB в памяти, массив хешей — 15 MB (замерено), а виджету в
+    строке меню столько памяти брать не за что. Коллизия хеша безопасна по
+    направлению: выдуманное слово будет ошибочно принято за настоящее и
+    останется нетронутым — то есть худший исход это пропущенная правка, а не
+    испорченный текст.
+
+    Хеш обязан быть стабильным между запусками, поэтому blake2b, а не
+    встроенный hash() — тот рандомизируется солью процесса.
+    """
+    src = VOCAB / "russian_words.txt.gz"
+    if not src.exists():
+        print("  ru_words: нет vocab/russian_words.txt.gz "
+              "(python3 fetch_sources.py russian) — слой жаргона работать не будет")
+        return 0
+    with gzip.open(src, "rt", encoding="utf-8") as fh:
+        hashes = array.array("Q", sorted(
+            {ru_word_hash(w) for w in (line.strip() for line in fh) if w}))
+    tmp = RU_WORDS_OUT.with_suffix(RU_WORDS_OUT.suffix + ".tmp")
+    tmp.write_bytes(hashes.tobytes())
+    os.replace(tmp, RU_WORDS_OUT)
+    return len(hashes)
+
+
 def build_homonyms(entries: dict, ru_stop: set[str]) -> int:
     """Русские слова, которые заодно являются названиями: «докер», «питон», «флаттер».
 
@@ -225,6 +260,10 @@ def main() -> None:
         ru_stop = set(RU_STOP_OUT.read_text(encoding="utf-8").split())
         h = build_homonyms(entries, ru_stop)
         print(f"  homonyms.txt: {h} слов-омонимов (решает LLM по контексту)")
+    w = build_ru_words()
+    if w:
+        print(f"  ru_words.bin: {w} словоформ ({w * 8 / 1e6:.0f} MB) "
+              f"— опознание жаргона")
 
 
 if __name__ == "__main__":

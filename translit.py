@@ -20,6 +20,7 @@ GigaAM — русская модель, и незнакомое английск
 устойчивы, гласные нет.
 """
 
+import hashlib
 import re
 
 # Фонетическая транслитерация. Многобуквенные сочетания идут первыми.
@@ -81,3 +82,17 @@ def fold(s: str) -> str:
 def skeleton(s: str) -> str:
     """Скелет из согласных: Flutter → fltr, «флаттер» → fltr."""
     return "".join(ch for ch in fold(s) if ch.isalpha() and ch not in _VOWELS)
+
+
+def ru_word_hash(word: str) -> int:
+    """Стабильный 64-битный ключ русской словоформы для ru_words.bin.
+
+    Живёт здесь, а не в corrector.py или build_lexicon.py, потому что нужен
+    обоим — сборщик пишет этим индекс, корректор им же его читает, и разъехаться
+    они не должны. Встроенный hash() не годится категорически: он солится на
+    каждый процесс, так что записанный индекс перестал бы читаться уже
+    следующим запуском.
+    """
+    return int.from_bytes(
+        hashlib.blake2b(word.strip().lower().encode("utf-8"),
+                        digest_size=8).digest(), "big")

@@ -43,6 +43,11 @@ app, from any source (typed, pasted, dictated).
 - A second field lets you teach it a brand-new proper noun — a
   meaningfully different action from a correction, see
   [Fix vs. teach](#fix-vs-teach-two-different-actions) below.
+- Separately, repairs Russified tech-jargon verbs that aren't proper nouns
+  at all and don't exist as real Russian words in any form (`закаметь` →
+  `закоммитить`, `запушыть` → `запушить`). This one runs automatically,
+  not just in the popup — see
+  [Layer 4](#layer-4-repairing-russified-jargon-verbs) below.
 
 ## Requirements
 
@@ -263,7 +268,7 @@ survive any refetch.
 
 ## How correction decides (architecture, short version)
 
-Three trust tiers, cheapest/most-certain first:
+Four trust tiers, cheapest/most-certain first:
 
 1. **Exact dictionary match** — instant, 0 LLM calls.
 2. **Fuzzy match** (`difflib`, ratio ≥ 0.88, single unambiguous candidate)
@@ -272,18 +277,94 @@ Three trust tiers, cheapest/most-certain first:
    dictionary candidates, the model returns *one digit* via a JSON-Schema
    constrained response. It cannot return free text here — there's nothing
    to inject or hallucinate into, it's picking an index.
+4. **Jargon-verb repair** — the one tier where the model *is* allowed to
+   write free text automatically (see below); everywhere else in tiers
+   1–3, the model never generates text that gets applied without a human
+   looking at it first.
 
-This is the layer used for **automatic, unattended** correction — e.g. if
-you wire this engine into your own pipeline the way the original GigaAM
-bridge does. The model is never allowed to freely generate text that gets
-applied without a human looking at it first.
+Tiers 1–3 are what you'd use for **automatic, unattended** correction —
+e.g. if you wire this engine into your own pipeline the way the original
+GigaAM bridge does.
 
-The **popup's variant list** (`corrector.suggest_variants()`) is the one
-deliberate exception: there, the LLM *is* allowed to freely guess a
-spelling it thinks you meant (`aifel tover` → `Eiffel Tower`), because the
-guess is only ever *displayed*, never applied, until you click it and hit
-Enter. The boundary isn't "how good is the model" — it's "does the result
-get applied without confirmation."
+The **popup's variant list** (`corrector.suggest_variants()`) is a
+separate, deliberate exception on top of all four tiers: there, the LLM
+*is* allowed to freely guess a spelling it thinks you meant (`aifel
+tover` → `Eiffel Tower`), because the guess is only ever *displayed*,
+never applied, until you click it and hit Enter. The boundary isn't "how
+good is the model" — it's "does the result get applied without
+confirmation."
+
+### Layer 4: repairing Russified jargon verbs
+
+Tiers 1–3 target one specific shape of error: a *Latin* name or term,
+misspelled or transliterated. They're structurally blind to a different,
+common case — a Russian speaker saying an English verb with Russian
+morphology bolted on (`закоммитить`, `запушить`, `задеплоить`), which the
+ASR model hears and writes as a garbled, **non-existent** Russian word
+(`закаметь`, `запушыть`). The target spelling here is Cyrillic, not Latin,
+so the dictionary (keyed on Latin normalization only) can't represent the
+correct answer at all — this needed a different mechanism, one where the
+model writes the replacement itself rather than picking from a list.
+
+**Entry gate — cheap, no model call, no context needed:**
+
+- single token, no spaces or hyphens, 5–24 characters, all-Cyrillic;
+- shaped like a verb (`_VERB_ENDING_RE`: infinitive `-ить/-ать/-еть/-ыть`,
+  past tense `-ил/-ила/-или`, present/future `-ит/-им/-ишь/-ете/-ят`);
+- **absent from a 1.53M-entry Russian wordform list** (`ru_words.bin`,
+  built by `build_lexicon.py`, stored as sorted 64-bit hashes — 12 MB
+  instead of the 266 MB a plain string set would cost, since a menu-bar
+  widget has no business holding that much memory just for this check).
+
+Real words never reach the model at all — only tokens that look like a
+verb but aren't one. This is deliberately narrow: an earlier version
+gated only on "absent from the wordform list" and, on a real 18k-word
+corpus, mis-fired on 9 out of 45 candidates — every single false positive
+was a *noun* or surname (`файлик`, `Харланенкова`), every real target was
+a *verb*. Adding the verb-shape check cut candidates reaching the model
+from 517 occurrences (280 unique) to 20 (10 unique) on the same corpus,
+with zero of the old false positives surviving.
+
+**The model call — this is where context comes in.** The surrounding
+text (±60 characters in normal dictation, or Accessibility-read context
+in the popup) is passed alongside the word, because the *word itself*
+doesn't carry tense/person/number: "надо закаметь" needs the infinitive
+(`закоммитить`), "вчера закамитил" needs past tense (`закоммитил`). The
+model returns a single string via a JSON-Schema-constrained field — the
+schema only constrains the *shape* of the response (one string field),
+not its content, so this is the one place the constraint can't do the
+usual job of making hallucination physically impossible.
+
+**Mechanical acceptance filter, run on every response before it's used**
+(`_accept_jargon`) — this is what stands in for the schema guarantee here:
+
+- first letter must match the original (case-insensitive) — a prefix is
+  something GigaAM/Whisper reliably hear correctly, so a model response
+  starting with a different letter is inventing a different word, not
+  fixing one. Caught live: `ревьюит` → `отревьюить` (an invented `от-`
+  prefix) has consonant-skeleton similarity 0.857 — high enough to look
+  like a real fix — but its first letter doesn't match;
+- length within a 0.6–1.8 ratio of the original;
+- consonant-skeleton similarity (`translit.skeleton`, vowels stripped,
+  since GigaAM/Whisper garble vowels far more than consonants) ≥ 0.8. This
+  threshold isn't arbitrary: every real target measured ≥ 0.889, while two
+  live false positives — `листить` → invented `лескать` (0.75) and the
+  `ревьюит` case above (0.857) — both fall below 0.8. The threshold used to
+  be 0.6, which let both of those through.
+
+Per-process cache (not persisted, not `learned.json`) avoids repeat model
+calls for the same word within one run — but it's keyed on the word alone,
+not word+context, so a word's *first* occurrence in a session is the only
+one that actually gets fresh context; later repeats reuse that decision.
+Confirmed jargon fixes still go through the normal `Fix` action into
+`learned.json` and short-circuit to tier 1 from then on, same as any other
+rule.
+
+This tier deliberately does **not** try to translate established Russian
+loanwords that already have settled, correct Cyrillic spellings
+(`перформанс`, `ресерч`, `конвершн`) into English — the wordform-list gate
+excludes them by construction, and that's intentional: they're normal,
+correctly-spelled Russian words, not ASR garbage.
 
 This free-guess layer is also the one that gets surrounding-context
 awareness (see [What it does](#what-it-does) above): a few words on each
